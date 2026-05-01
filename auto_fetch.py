@@ -726,28 +726,27 @@ class AutoFetch:
             self._log(logging.INFO, f"创建文件夹: {self.data_folder}")
             self.data_folder.mkdir(parents=True, exist_ok=True)  # 创建文件夹
             (self.data_folder / "images").mkdir(parents=True, exist_ok=True)
-            with open(self.data_folder / "arknights.csv", "w", newline="") as file:
-                # 创建CSV表头
-                if self.field_recognizer is not None:
-                    # 获取场地特征列数
-                    num_field_features = len(self.field_recognizer.get_feature_columns())
-                    
-                    # 按照data_cleaning_with_field_recognize_gpu.py的格式创建表头
-                    header = [f"{i+1}L" for i in range(MONSTER_COUNT)]  # 1L-77L
-                    header += [f"{i+1}LF" for i in range(MONSTER_COUNT, MONSTER_COUNT + num_field_features)]  # 78LF-83LF (场地特征)
-                    header += [f"{i+1}R" for i in range(MONSTER_COUNT)]  # 1R-77R 
-                    header += [f"{i+1}RF" for i in range(MONSTER_COUNT, MONSTER_COUNT + num_field_features)]  # 78RF-83RF (场地特征)
+
+            def get_expected_header():
+                """根据配置生成预期表头"""
+                if FIELD_FEATURE_COUNT > 0:
+                    header = [f"{i + 1}L" for i in range(MONSTER_COUNT)]
+                    header += [f"{i + 1}LF" for i in range(MONSTER_COUNT, MONSTER_COUNT + FIELD_FEATURE_COUNT)]
+                    header += [f"{i + 1}R" for i in range(MONSTER_COUNT)]
+                    header += [f"{i + 1}RF" for i in range(MONSTER_COUNT, MONSTER_COUNT + FIELD_FEATURE_COUNT)]
                     header += ["Result", "ImgPath"]
-                    logger.info(f"创建包含场地特征的CSV表头，场地特征数: {num_field_features}")
                 else:
-                    # 仅怪物数据的格式
-                    header = [f"{i+1}L" for i in range(MONSTER_COUNT)]  # 左侧怪物数据
-                    header += [f"{i+1}R" for i in range(MONSTER_COUNT)]  # 右侧怪物数据
+                    header = [f"{i + 1}L" for i in range(MONSTER_COUNT)]
+                    header += [f"{i + 1}R" for i in range(MONSTER_COUNT)]
                     header += ["Result", "ImgPath"]
-                    logger.info("创建仅包含怪物数据的CSV表头")
-                
+                return header
+
+            # 创建CSV表头
+            with open(self.data_folder / "arknights.csv", "w", newline="") as file:
+                header = get_expected_header()
                 writer = csv.writer(file)
                 writer.writerow(header)
+
             self.log_file_handler = logging.FileHandler(
                 self.data_folder / f"AutoFetch_{start_time}.log", "a", "utf-8"
             )
