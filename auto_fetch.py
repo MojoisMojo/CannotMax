@@ -454,7 +454,7 @@ class AutoFetch:
             else:
                 logger.error("识别结果有错误，本轮跳过")
         # 选择预测方法
-        if self.cannot_model.is_model_loaded:
+        if self.cannot_model and self.cannot_model.is_model_loaded:
             if self.field_recognizer is not None:
                 # 构建包含地形的完整特征向量
                 full_features = self.build_terrain_features(left_counts, right_counts)

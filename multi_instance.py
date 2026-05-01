@@ -166,12 +166,14 @@ class DeviceInstance:
         self.thread_running = False  # 线程是否正在运行的标志
         self.game_mode = None  # 保存游戏模式
         self.is_invest = None  # 保存投资设置
+        self.is_predict = None  # 保存预测设置
 
-    def start(self, game_mode, is_invest):
+    def start(self, game_mode, is_invest, is_predict):
         try:
             # 保存设置
             self.game_mode = game_mode
             self.is_invest = is_invest
+            self.is_predict = is_predict
             
             # 重置停止事件和标志
             self.stop_event.clear()
@@ -179,7 +181,7 @@ class DeviceInstance:
             self.last_activity_time = time.time()
             self.status = "连接中"
             
-            logger.info(f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}")
+            logger.info(f"[{self.serial}] 开始启动实例，游戏模式: {game_mode}, 自动投资: {is_invest}, 预测: {is_predict}")
             
             # 记录实例启动时间戳
             self.start_time = time.time()
@@ -226,7 +228,7 @@ class DeviceInstance:
                 stop_callback=self._on_stop_callback,
                 training_duration=-1,
                 recognizer=get_recognizer(),
-                cannot_model=get_cannot_model(),
+                cannot_model=get_cannot_model() if is_predict else None,
                 field_recognizer=get_field_recognizer() if FIELD_FEATURE_COUNT > 0 else None,
                 start_timestamp=self.start_time,  # 传递实例启动时间戳
             )
@@ -324,6 +326,11 @@ class MultiInstanceManager(QMainWindow):
         self.game_mode_combo.addItems(["单人", "30人"])
         settings_layout.addWidget(QLabel("模式:"))
         settings_layout.addWidget(self.game_mode_combo)
+
+        self.predict_check = QCheckBox("预测")
+        self.predict_check.setChecked(True)
+        self.predict_check.toggled.connect(self._on_predict_toggled)
+        settings_layout.addWidget(self.predict_check)
         
         self.invest_check = QCheckBox("自动投资")
         self.invest_check.setChecked(False)
@@ -406,6 +413,11 @@ class MultiInstanceManager(QMainWindow):
         parts = text.replace('\n', ',').replace('，', ',').replace(';', ',').replace(' ', ',').split(',')
         return [p.strip() for p in parts if p.strip().isdigit()]
 
+    def _on_predict_toggled(self, checked):
+        self.invest_check.setEnabled(checked)
+        if not checked:
+            self.invest_check.setChecked(False)
+
     def start_all(self):
         try:
             Path("multi_ports.txt").write_text(self.ports_input.text())
@@ -416,8 +428,9 @@ class MultiInstanceManager(QMainWindow):
         ports = self._parse_ports(self.ports_input.text())
         game_mode = self.game_mode_combo.currentText()
         is_invest = self.invest_check.isChecked()
+        is_predict = self.predict_check.isChecked()
         
-        logger.info(f"开始启动多开实例，端口列表: {ports}, 游戏模式: {game_mode}, 自动投资: {is_invest}")
+        logger.info(f"开始启动多开实例，端口列表: {ports}, 游戏模式: {game_mode}, 预测: {is_predict}, 自动投资: {is_invest}")
         
         def start_single_instance(port):
             # 检查是否已经在运行或正在启动中
@@ -440,7 +453,7 @@ class MultiInstanceManager(QMainWindow):
                 # 立即添加到实例字典，以便 stop_all 可以找到它
                 self.instances[port] = instance
                 try:
-                    if instance.start(game_mode, is_invest):
+                    if instance.start(game_mode, is_invest, is_predict):
                         logger.info(f"端口 {port} 的实例启动成功")
                     else:
                         logger.error(f"端口 {port} 的实例启动失败")
@@ -594,6 +607,7 @@ class MultiInstanceManager(QMainWindow):
         else:
             game_mode = self.game_mode_combo.currentText()
             is_invest = self.invest_check.isChecked()
+            is_predict = self.predict_check.isChecked()
             
             def do_start():
                 if port in self.starting_ports:
@@ -602,7 +616,7 @@ class MultiInstanceManager(QMainWindow):
                 instance = DeviceInstance(port)
                 self.instances[port] = instance
                 try:
-                    instance.start(game_mode, is_invest)
+                    instance.start(game_mode, is_invest, is_predict)
                 finally:
                     self.starting_ports.discard(port)
             
