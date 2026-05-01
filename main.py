@@ -74,6 +74,7 @@ class ArknightsApp(QMainWindow):
     update_monster_signal = pyqtSignal(list)
     update_prediction_signal = pyqtSignal(float)
     update_statistics_signal = pyqtSignal()  # 用于更新统计信息
+    update_package_button_signal = pyqtSignal(bool)  # 用于更新打包按钮启用状态
     qt_button_style = """
         QPushButton {
             background-color: #313131;
@@ -147,9 +148,9 @@ class ArknightsApp(QMainWindow):
         model_name = Path(self.cannot_model.model_path).name if self.cannot_model.model_path else "未加载"
         self.setWindowTitle(f"铁鲨鱼_Arknights Neural Network - v{version} - model: {model_name}")
         self.setWindowIcon(QIcon("ico/icon.ico"))
-        self.setGeometry(100, 100, 500, 580)
-        self.setMinimumWidth(580)
-        self.setMaximumWidth(580)
+        self.setGeometry(100, 100, 570, 570)
+        self.setMinimumWidth(570)
+        self.setMaximumWidth(570)
         self.background = QPixmap("ico/background.png")
 
         # 初始化动画对象
@@ -162,9 +163,9 @@ class ArknightsApp(QMainWindow):
         main_layout = QHBoxLayout(main_widget)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # 左侧面板
+        # 输入面板
         self.input_panel = InputPanelUI()
-        self.input_panel.setFixedWidth(528)
+        self.input_panel.setFixedWidth(640)
         self.input_panel.predict_requested.connect(self.predict)
         self.input_panel.reset_requested.connect(self.reset_entries)
         self.input_panel.input_changed.connect(self.update_input_display)
@@ -504,6 +505,7 @@ class ArknightsApp(QMainWindow):
         self.update_monster_signal.connect(self.update_monster)
         self.update_prediction_signal.connect(self.update_prediction)
         self.update_statistics_signal.connect(self.update_statistics)
+        self.update_package_button_signal.connect(self.package_data_button.setEnabled)
         self.refresh_device_list()
         DarkModeStyleFix.apply(QApplication.instance())
 
@@ -939,7 +941,7 @@ class ArknightsApp(QMainWindow):
         stats_text = (
             f"总共填写次数: {self.auto_fetch.total_fill_count},    "
             f"填写×次数: {self.auto_fetch.incorrect_fill_count},    "
-            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟"
+            f"运行时长: {int(hours)}小时{int(minutes)}分钟"
         )
         self.stats_label.setText(stats_text)
 
@@ -967,9 +969,11 @@ class ArknightsApp(QMainWindow):
 
     def start_callback(self):
         self.update_button_signal.emit("停止自动获取数据")
+        self.update_package_button_signal.emit(False)
 
     def stop_callback(self):
         self.update_button_signal.emit("自动获取数据")
+        self.update_package_button_signal.emit(True)
 
     def update_monster_callback(self, results: list):
         self.update_monster_signal.emit(results)

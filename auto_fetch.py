@@ -405,7 +405,7 @@ class AutoFetch:
         stats_text = (
             f"总共填写次数: {self.total_fill_count}\n"
             f"填写×次数: {self.incorrect_fill_count}\n"
-            f"当次运行时长: {int(hours)}小时{int(minutes)}分钟\n"
+            f"运行: {int(hours)}小时{int(minutes)}分钟\n"
         )
         with open("log.txt", "a", encoding="utf-8") as log_file:
             log_file.write(stats_text)
@@ -705,6 +705,7 @@ class AutoFetch:
                 # 检测一次间隔时间——————————————————————————————————
                 time.sleep(0.2)
             except Exception as e:
+                logger.exception(f"自动获取数据出错:\n{e}")
                 self._log(logging.ERROR, f"自动获取数据出错:\n{e}")
                 break
 
