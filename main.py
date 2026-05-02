@@ -544,8 +544,36 @@ class ArknightsApp(QMainWindow):
             return self.pc_connector
         return self.adb_connector
 
+    def _set_mode_button_checked(self, mode):
+        mode_btn_map = {
+            "ADB": self.adb_mode_btn,
+            "PC": self.pc_mode_btn,
+            "WIN": self.win_mode_btn,
+        }
+        btn = mode_btn_map.get(mode)
+        if btn is not None:
+            btn.setChecked(True)
+
     def on_mode_changed(self, mode):
         """切换捕获模式"""
+        previous_mode = self.current_capture_mode
+
+        if mode == "PC" and not is_user_admin():
+            reply = QMessageBox.question(
+                self,
+                "需要管理员权限",
+                "切换到 PC 模式需要管理员权限，是否现在重启并尝试提权？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                if relaunch_as_admin(capture_mode="PC"):
+                    QApplication.instance().quit()
+                else:
+                    QMessageBox.warning(self, "提权失败", "未能启动管理员进程，请稍后重试。")
+            self._set_mode_button_checked(previous_mode)
+            return
+
         self.current_capture_mode = mode
         logger.info(f"切换捕获模式为: {mode}")
 
@@ -1115,24 +1143,66 @@ class ArknightsApp(QMainWindow):
         event.accept()
 
 
-def ensure_admin():
+def is_user_admin():
     import ctypes
     try:
-        if ctypes.windll.shell32.IsUserAnAdmin():
-            return
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
     except:
-        return
-    ctypes.windll.shell32.ShellExecuteW(
+        return False
+
+
+def _build_capture_mode_args(capture_mode=None):
+    args = list(sys.argv)
+    if capture_mode is None:
+        return args
+
+    filtered_args = []
+    skip_next = False
+    for index, arg in enumerate(args):
+        if skip_next:
+            skip_next = False
+            continue
+        if index == 0:
+            filtered_args.append(arg)
+            continue
+        if arg == "--capture-mode":
+            skip_next = True
+            continue
+        if arg.startswith("--capture-mode="):
+            continue
+        filtered_args.append(arg)
+
+    filtered_args.extend(["--capture-mode", capture_mode])
+    return filtered_args
+
+
+def relaunch_as_admin(capture_mode=None):
+    import ctypes
+
+    params = " ".join([f'"{arg}"' for arg in _build_capture_mode_args(capture_mode)])
+    result = ctypes.windll.shell32.ShellExecuteW(
         None, "runas", sys.executable,
-        " ".join([f'"{arg}"' for arg in sys.argv]),
+        params,
         None, 1
     )
-    sys.exit()
+    return result > 32
+
+
+def get_startup_capture_mode():
+    args = sys.argv[1:]
+    for index, arg in enumerate(args):
+        if arg == "--capture-mode" and index + 1 < len(args):
+            return args[index + 1].upper()
+        if arg.startswith("--capture-mode="):
+            return arg.split("=", 1)[1].upper()
+    return None
 
 
 if __name__ == "__main__":
-    ensure_admin()
     app = QApplication([])
     window = ArknightsApp()
     window.show()
+    startup_mode = get_startup_capture_mode()
+    if startup_mode in {"ADB", "PC", "WIN"}:
+        window.on_mode_changed(startup_mode)
     app.exec()
