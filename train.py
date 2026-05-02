@@ -404,7 +404,7 @@ def main():
 
     # 数据集分割
     data_length = len(dataset)
-    val_size = int(0.1 * data_length)  # 10% 验证集
+    val_size = int(config["test_size"] * data_length)  # 10% 验证集
     train_size = data_length - val_size
 
     # 划分
