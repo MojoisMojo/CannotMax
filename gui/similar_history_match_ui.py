@@ -4,7 +4,13 @@ from PyQt6.QtGui import QPixmap, QImage, QFont, QIcon, QPainter, QColor
 import numpy as np
 import logging
 
-from similar_history_match import HistoryMatch
+from .similar_history_match import HistoryMatch
+# 从父目录找config
+import sys
+from pathlib import Path
+root_dir = Path(__file__).parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 from config import MONSTER_COUNT, MONSTER_DATA
 
 logger = logging.getLogger(__name__)

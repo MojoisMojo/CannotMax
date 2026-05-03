@@ -1,5 +1,11 @@
 import numpy as np
 import pandas as pd
+# 从父目录找config
+import sys
+from pathlib import Path
+root_dir = Path(__file__).parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
 from config import MONSTER_COUNT
 from config import FIELD_FEATURE_COUNT
 
