@@ -1,7 +1,5 @@
 import logging
-import os
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -11,29 +9,11 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-def resolve_maafw_path() -> str:
-    if os.environ.get("MAAFW_BINARY_PATH"):
-        return os.environ["MAAFW_BINARY_PATH"]
-    candidates = [
-        Path(sys.executable).parent / "maafw",
-        Path.cwd() / "maafw",
-        Path(__file__).resolve().parent / "maafw",
-    ]
-    for p in candidates:
-        if p.is_dir() and any(p.glob("MaaFramework.dll")):
-            resolved = str(p)
-            os.environ["MAAFW_BINARY_PATH"] = resolved
-            logger.info(f"自动解析maafw路径: {resolved}")
-            return resolved
-    return ""
-
-
 class MaaAvailability(Enum):
     UNKNOWN = "unknown"
     AVAILABLE = "available"
     IMPORT_FAILED = "import_failed"
     INIT_FAILED = "init_failed"
-    BINARY_MISSING = "binary_missing"
 
 
 @dataclass(frozen=True)
@@ -60,14 +40,6 @@ class MaaFrameworkDetector:
     @classmethod
     def detect(cls) -> MaaAvailability:
         if cls._checked:
-            return cls._status
-
-        binary_path = resolve_maafw_path()
-        if binary_path and not Path(binary_path).exists():
-            cls._status = MaaAvailability.BINARY_MISSING
-            cls._status_message = f"MAAFW_BINARY_PATH路径无效: {binary_path}"
-            cls._checked = True
-            logger.warning(cls._status_message)
             return cls._status
 
         try:
@@ -132,9 +104,6 @@ class MaaAdbConnector:
         return None
 
     def _ensure_toolkit(self):
-        binary_path = resolve_maafw_path()
-        if binary_path:
-            os.environ["MAAFW_BINARY_PATH"] = binary_path
         from maa.toolkit import Toolkit
         Toolkit.init_option(str(Path.cwd()))
         return Toolkit
@@ -180,10 +149,6 @@ class MaaAdbConnector:
             return False
 
         try:
-            binary_path = resolve_maafw_path()
-            if binary_path:
-                os.environ["MAAFW_BINARY_PATH"] = binary_path
-
             from maa.toolkit import Toolkit
             from maa.controller import AdbController
 

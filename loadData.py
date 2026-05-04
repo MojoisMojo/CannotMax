@@ -262,11 +262,6 @@ class PcConnector:
             self.screen_height = rect[3] - rect[1]
             
             try:
-                from maa_adb_connector import resolve_maafw_path
-                binary_path = resolve_maafw_path()
-                if binary_path:
-                    os.environ["MAAFW_BINARY_PATH"] = binary_path
-                
                 from maa.toolkit import Toolkit
                 from maa.controller import Win32Controller, MaaWin32ScreencapMethodEnum, MaaWin32InputMethodEnum
                 Toolkit.init_option(str(Path.cwd()))
