@@ -397,9 +397,9 @@ class ArknightsApp(QMainWindow):
         connection_layout.addWidget(mode_row)
 
         # 序列号行
-        conn_row1 = QWidget()
-        conn_row1_layout = QHBoxLayout(conn_row1)
-        conn_row1_layout.setContentsMargins(0, 0, 0, 0)
+        self.adb_row = QWidget()
+        adb_row_layout = QHBoxLayout(self.adb_row)
+        adb_row_layout.setContentsMargins(0, 0, 0, 0)
 
         self.serial_label = QLabel("ADB设备:")
         self.serial_entry = QComboBox()
@@ -414,38 +414,37 @@ class ArknightsApp(QMainWindow):
         self.connect_button = QPushButton("连接")
         self.connect_button.clicked.connect(self.connect_custom_address)
 
-        conn_row1_layout.addWidget(self.serial_label)
-        conn_row1_layout.addWidget(self.serial_entry)
-        conn_row1_layout.addWidget(self.serial_button)
-        conn_row1_layout.addWidget(self.connect_button)
+        adb_row_layout.addWidget(self.serial_label)
+        adb_row_layout.addWidget(self.serial_entry)
+        adb_row_layout.addWidget(self.serial_button)
+        adb_row_layout.addWidget(self.connect_button)
 
         # MAA状态行
         self.maa_status_label = QLabel("")
         self.maa_status_label.setStyleSheet("color: #666666; font-size: 10px;")
         self.maa_status_label.setWordWrap(True)
 
-        connection_layout.addWidget(conn_row1)
+        connection_layout.addWidget(self.adb_row)
         connection_layout.addWidget(self.maa_status_label)
 
         # 捕获设置行
-        conn_row2 = QWidget()
-        conn_row2_layout = QHBoxLayout(conn_row2)
-        conn_row2_layout.setContentsMargins(0, 0, 0, 0)
+        self.win_row = QWidget()
+        win_row_layout = QHBoxLayout(self.win_row)
+        win_row_layout.setContentsMargins(0, 0, 0, 0)
 
         self.choose_window_button = QPushButton("选择截屏窗口")
         self.choose_window_button.clicked.connect(self.choose_capture_window)
         self.reselect_button = QPushButton("选择范围")
         self.reselect_button.clicked.connect(self.reselect_roi)
 
-        # 初始为 ADB 模式，禁用窗口捕获相关按钮
-        self.choose_window_button.setEnabled(False)
-        self.reselect_button.setEnabled(False)
+        win_row_layout.addWidget(self.choose_window_button)
+        win_row_layout.addWidget(self.reselect_button)
 
-        conn_row2_layout.addWidget(self.choose_window_button)
-        conn_row2_layout.addWidget(self.reselect_button)
+        # 初始为 ADB 模式，隐藏窗口捕获相关行
+        self.win_row.setVisible(False)
 
-        connection_layout.addWidget(conn_row1)
-        connection_layout.addWidget(conn_row2)
+        connection_layout.addWidget(self.adb_row)
+        connection_layout.addWidget(self.win_row)
 
         # 将两个组框添加到左侧列
         left_column.addWidget(control_group)
@@ -582,14 +581,10 @@ class ArknightsApp(QMainWindow):
         is_pc_mode = (mode == "PC")
 
         # 切换窗口捕获相关控件
-        self.choose_window_button.setEnabled(is_win_mode)
-        self.reselect_button.setEnabled(is_win_mode)
-        
+        self.win_row.setVisible(is_win_mode)
+
         # 切换 ADB 相关控件
-        self.serial_label.setEnabled(is_adb_mode)
-        self.serial_entry.setEnabled(is_adb_mode)
-        self.serial_button.setEnabled(is_adb_mode)
-        self.connect_button.setEnabled(is_adb_mode)
+        self.adb_row.setVisible(is_adb_mode)
 
         if mode == "ADB":
             self.refresh_device_list()
