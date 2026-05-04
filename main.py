@@ -106,6 +106,7 @@ class ArknightsApp(QMainWindow):
         # 尝试连接模拟器
         self.adb_connector = MaaAdbConnector()
         self.pc_connector = loadData.PcConnector()
+        self._pc_window_info = []
         self.adb_connector_thread = ADBConnectorThread(self)
         self.adb_connector_thread.connect_finished.connect(self.on_adb_connected)
         self.adb_connector_thread.start()
@@ -427,6 +428,93 @@ class ArknightsApp(QMainWindow):
         connection_layout.addWidget(self.adb_row)
         connection_layout.addWidget(self.maa_status_label)
 
+        # PC端窗口选择行
+        self.pc_row = QWidget()
+        pc_row_layout = QHBoxLayout(self.pc_row)
+        pc_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.pc_window_label = QLabel("PC窗口:")
+        self.pc_window_combo = QComboBox()
+        self.pc_window_combo.setFixedWidth(200)
+
+        self.pc_window_refresh_btn = QPushButton("刷新")
+        self.pc_window_refresh_btn.clicked.connect(self.refresh_pc_window_list)
+
+        self.pc_connect_btn = QPushButton("连接")
+        self.pc_connect_btn.clicked.connect(self.connect_pc_window)
+
+        pc_row_layout.addWidget(self.pc_window_label)
+        pc_row_layout.addWidget(self.pc_window_combo)
+        pc_row_layout.addWidget(self.pc_window_refresh_btn)
+        pc_row_layout.addWidget(self.pc_connect_btn)
+
+        self.pc_row.setVisible(False)
+        connection_layout.addWidget(self.pc_row)
+
+        # PC端截图方式选择行
+        self.pc_screencap_row = QWidget()
+        pc_screencap_row_layout = QHBoxLayout(self.pc_screencap_row)
+        pc_screencap_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.pc_screencap_label = QLabel("截图方式:")
+        self.pc_screencap_combo = QComboBox()
+        self._screencap_methods = {
+            "WGC (后台,高效,可最小化)": None,
+            "PrintWindow (后台,稳定,可最小化)": None,
+            "ScreenDC (后台,备用,不可最小化)": None,
+            "DesktopWindow (前台,不可遮挡)": None,
+        }
+        try:
+            from maa.define import MaaWin32ScreencapMethodEnum
+            self._screencap_methods = {
+                "WGC (后台,高效,可最小化)": MaaWin32ScreencapMethodEnum.FramePool,
+                "PrintWindow (后台,稳定,可最小化)": MaaWin32ScreencapMethodEnum.PrintWindow,
+                "ScreenDC (后台,备用,不可最小化)": MaaWin32ScreencapMethodEnum.ScreenDC,
+                "DesktopWindow (前台,不可遮挡)": MaaWin32ScreencapMethodEnum.DXGI_DesktopDup_Window,
+            }
+        except Exception:
+            pass
+        self.pc_screencap_combo.addItems(list(self._screencap_methods.keys()))
+        self.pc_screencap_combo.setCurrentIndex(0)
+
+        pc_screencap_row_layout.addWidget(self.pc_screencap_label)
+        pc_screencap_row_layout.addWidget(self.pc_screencap_combo)
+        pc_screencap_row_layout.addStretch()
+
+        self.pc_screencap_row.setVisible(False)
+        connection_layout.addWidget(self.pc_screencap_row)
+
+        # PC端输入模拟方式选择行
+        self.pc_input_row = QWidget()
+        pc_input_row_layout = QHBoxLayout(self.pc_input_row)
+        pc_input_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.pc_input_label = QLabel("输入方式:")
+        self.pc_input_combo = QComboBox()
+        self._input_methods = {
+            "Seize (前台,完全抢鼠标)": None,
+            "SendMsg-CursorPos (半后台,短暂抢鼠标)": None,
+            "SendMsg-WindowPos (全后台,不抢鼠标)": None,
+        }
+        try:
+            from maa.define import MaaWin32InputMethodEnum
+            self._input_methods = {
+                "Seize (前台,完全抢鼠标)": MaaWin32InputMethodEnum.Seize,
+                "SendMsg-CursorPos (半后台,短暂抢鼠标)": MaaWin32InputMethodEnum.SendMessageWithCursorPos,
+                "SendMsg-WindowPos (全后台,不抢鼠标)": MaaWin32InputMethodEnum.SendMessageWithWindowPos,
+            }
+        except Exception:
+            pass
+        self.pc_input_combo.addItems(list(self._input_methods.keys()))
+        self.pc_input_combo.setCurrentIndex(1)
+
+        pc_input_row_layout.addWidget(self.pc_input_label)
+        pc_input_row_layout.addWidget(self.pc_input_combo)
+        pc_input_row_layout.addStretch()
+
+        self.pc_input_row.setVisible(False)
+        connection_layout.addWidget(self.pc_input_row)
+
         # 捕获设置行
         self.win_row = QWidget()
         win_row_layout = QHBoxLayout(self.win_row)
@@ -443,7 +531,6 @@ class ArknightsApp(QMainWindow):
         # 初始为 ADB 模式，隐藏窗口捕获相关行
         self.win_row.setVisible(False)
 
-        connection_layout.addWidget(self.adb_row)
         connection_layout.addWidget(self.win_row)
 
         # 将两个组框添加到左侧列
@@ -586,6 +673,11 @@ class ArknightsApp(QMainWindow):
         # 切换 ADB 相关控件
         self.adb_row.setVisible(is_adb_mode)
 
+        # 切换 PC 相关控件
+        self.pc_row.setVisible(is_pc_mode)
+        self.pc_screencap_row.setVisible(is_pc_mode)
+        self.pc_input_row.setVisible(is_pc_mode)
+
         if mode == "ADB":
             self.refresh_device_list()
             self.recognizer = recognize.RecognizeMonster(method="ADB")
@@ -597,11 +689,8 @@ class ArknightsApp(QMainWindow):
             if self.recognizer._winrt is None:
                 self.choose_capture_window()
         elif mode == "PC":
-            self.recognizer = recognize.RecognizeMonster(method="ADB") # reuse ADB reading methodology but on PC Connector
-            if not self.pc_connector.is_connected:
-                self.pc_connector.connect()
-                if not self.pc_connector.is_connected:
-                    QMessageBox.warning(self, "警告", "未能连接到PC端窗口(明日方舟)。")
+            self.recognizer = recognize.RecognizeMonster(method="ADB")
+            self.refresh_pc_window_list()
 
     def on_adb_connected(self):
         logger.info("模拟器初始化完成")
@@ -613,6 +702,43 @@ class ArknightsApp(QMainWindow):
         else:
             self.maa_status_label.setText("MAA Framework连接失败")
             self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
+
+    def refresh_pc_window_list(self):
+        windows = self.pc_connector.get_visible_window_list()
+        windows = [w for w in windows if "明日方舟" in w["window_name"]]
+        self.pc_window_combo.clear()
+        self._pc_window_info = windows
+        if windows:
+            for w in windows:
+                self.pc_window_combo.addItem(f"{w['window_name']} [{w['class_name']}]")
+            self.pc_window_combo.setCurrentIndex(0)
+        else:
+            self.pc_window_combo.addItem("未发现窗口")
+
+    def connect_pc_window(self):
+        idx = self.pc_window_combo.currentIndex()
+        if idx < 0 or not self._pc_window_info:
+            QMessageBox.warning(self, "提示", "请先刷新并选择一个窗口")
+            return
+
+        window_info = self._pc_window_info[idx]
+        hwnd = window_info["hwnd"]
+
+        screencap_key = self.pc_screencap_combo.currentText()
+        screencap_method = self._screencap_methods.get(screencap_key)
+
+        input_key = self.pc_input_combo.currentText()
+        input_method = self._input_methods.get(input_key)
+
+        self.pc_connector.connect(hwnd=hwnd, screencap_method=screencap_method, input_method=input_method)
+
+        if self.pc_connector.is_connected:
+            self.maa_status_label.setText(f"PC已连接: {window_info['window_name']}")
+            self.maa_status_label.setStyleSheet("color: #00aa00; font-size: 10px;")
+        else:
+            self.maa_status_label.setText("PC窗口连接失败")
+            self.maa_status_label.setStyleSheet("color: #aa0000; font-size: 10px;")
+            QMessageBox.warning(self, "警告", f"未能连接到PC端窗口: {window_info['window_name']}")
 
     def choose_capture_window(self):
         """弹出窗口选择器，切换 WinRT 截屏源（窗口标题或整屏）。"""

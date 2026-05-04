@@ -252,45 +252,78 @@ class PcConnector:
         self.capture = None
         self.is_connected = False
         self.maa_ctrl = None
+        self._desktop_windows = []
 
-    def connect(self):
-        hwnd = win32gui.FindWindow(None, self.window_name)
-        if hwnd:
+    def find_desktop_windows(self):
+        try:
+            from maa.toolkit import Toolkit
+            Toolkit.init_option(str(Path.cwd()))
+            self._desktop_windows = Toolkit.find_desktop_windows()
+            logger.info(f"MaaToolkitDesktopWindowFindAll 发现 {len(self._desktop_windows)} 个窗口")
+            return self._desktop_windows
+        except Exception as e:
+            logger.error(f"MaaToolkitDesktopWindowFindAll 失败: {e}")
+            return []
+
+    def get_visible_window_list(self):
+        windows = self.find_desktop_windows()
+        result = []
+        for w in windows:
+            title = w.window_name.strip()
+            if title:
+                result.append({"hwnd": w.hwnd, "class_name": w.class_name, "window_name": title})
+        return result
+
+    def connect(self, hwnd=None, screencap_method=None, input_method=None):
+        if hwnd is not None:
             self.hwnd = hwnd
-            rect = win32gui.GetClientRect(self.hwnd)
-            self.screen_width = rect[2] - rect[0]
-            self.screen_height = rect[3] - rect[1]
-            
-            try:
-                from maa.toolkit import Toolkit
-                from maa.controller import Win32Controller, MaaWin32ScreencapMethodEnum, MaaWin32InputMethodEnum
-                Toolkit.init_option(str(Path.cwd()))
-                
-                # 既然纯 SendMessage 被引擎无视，我们退一步使用 SendMessageWithCursorPos
-                # 它会在瞬间把鼠标光标移动到目标位置发送消息，再瞬间移回原位。这种方式可能不会强制将游戏窗口调回前台。
-                self.maa_ctrl = Win32Controller(
-                    self.hwnd,
-                    screencap_method=MaaWin32ScreencapMethodEnum.FramePool,
-                    mouse_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos,
-                    keyboard_method=MaaWin32InputMethodEnum.SendMessageWithCursorPos
-                )
-                self.maa_ctrl.post_connection().wait()
-                
-                # 设置截图使用原始大小，防止因为MAA默认缩放导致外部坐标及图像切割计算出错
-                self.maa_ctrl.set_screenshot_use_raw_size(True)
-                
-                logger.info(f"已成功通过 MaaFramework 接管 PC 窗口 (支持后台操作)")
-            except Exception as e:
-                logger.warning(f"MaaFramework 初始化失败，退回原有前台实现: {e}")
-                self.maa_ctrl = None
-                self.capture = WinRTScreenCapture(window_name=self.window_name)
-                self.capture.start()
-
-            self.is_connected = True
-            logger.info(f"成功连接到PC端窗口: {self.window_name}, 分辨率: {self.screen_width}x{self.screen_height}")
+            for w in self._desktop_windows:
+                if w.hwnd == hwnd:
+                    self.window_name = w.window_name
+                    break
         else:
+            hwnd = win32gui.FindWindow(None, self.window_name)
+            if hwnd:
+                self.hwnd = hwnd
+
+        if not self.hwnd:
             logger.warning(f"未找到PC端窗口: {self.window_name}")
             self.is_connected = False
+            return
+
+        rect = win32gui.GetClientRect(self.hwnd)
+        self.screen_width = rect[2] - rect[0]
+        self.screen_height = rect[3] - rect[1]
+
+        try:
+            from maa.toolkit import Toolkit
+            from maa.controller import Win32Controller
+            from maa.define import MaaWin32ScreencapMethodEnum, MaaWin32InputMethodEnum
+            Toolkit.init_option(str(Path.cwd()))
+
+            if screencap_method is None:
+                screencap_method = MaaWin32ScreencapMethodEnum.FramePool
+            if input_method is None:
+                input_method = MaaWin32InputMethodEnum.SendMessageWithCursorPos
+
+            self.maa_ctrl = Win32Controller(
+                self.hwnd,
+                screencap_method=screencap_method,
+                mouse_method=input_method,
+                keyboard_method=input_method
+            )
+            self.maa_ctrl.post_connection().wait()
+            self.maa_ctrl.set_screenshot_use_raw_size(True)
+
+            logger.info(f"已通过 MaaFramework Win32ControlUnitMgr 接管 PC 窗口 (截图={screencap_method}, 输入={input_method})")
+        except Exception as e:
+            logger.warning(f"MaaFramework 初始化失败，退回原有前台实现: {e}")
+            self.maa_ctrl = None
+            self.capture = WinRTScreenCapture(window_name=self.window_name)
+            self.capture.start()
+
+        self.is_connected = True
+        logger.info(f"成功连接到PC端窗口: {self.window_name}, 分辨率: {self.screen_width}x{self.screen_height}")
 
     def capture_screenshot(self):
         if not self.is_connected:
