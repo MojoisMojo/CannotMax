@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from config import FIELD_FEATURE_COUNT, MONSTER_COUNT
 
+
 class UnitAwareTransformer(nn.Module):
     def __init__(self, num_units, embed_dim=256, num_heads=4, num_layers=4, dropout=0.3):
         super().__init__()
@@ -29,7 +30,8 @@ class UnitAwareTransformer(nn.Module):
         self.friend_attentions = nn.ModuleList()
         self.enemy_ffn = nn.ModuleList()
         self.friend_ffn = nn.ModuleList()
-        self.norm = nn.ModuleList()
+        # 删除归一化
+        # self.norm.append(nn.LayerNorm(embed_dim))
 
         for _ in range(num_layers):
             # 敌方注意力层
@@ -65,16 +67,7 @@ class UnitAwareTransformer(nn.Module):
             # 初始化注意力层参数
             nn.init.xavier_uniform_(self.enemy_attentions[-1].in_proj_weight)
             nn.init.xavier_uniform_(self.friend_attentions[-1].in_proj_weight)
-            self.norm.append(nn.LayerNorm(embed_dim))
-
-
-        # 全连接输出层
-        self.fc = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim * 2),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(embed_dim * 2, 1)
-        )
+            # self.norm.append(nn.LayerNorm(embed_dim))
 
     def forward(self, left_signs, left_counts, right_signs, right_counts):
         # 提取TopK特征（怪物 + 场地）
@@ -88,24 +81,9 @@ class UnitAwareTransformer(nn.Module):
         left_feat = self.unit_embed(left_indices)  # (B, k, 128)
         right_feat = self.unit_embed(right_indices)  # (B, k, 128)
 
-        embed_dim = self.embed_dim
-
-        # 前x维不变，后y维 *= 数量，但使用缩放后的值
-        left_feat = torch.cat(
-            [
-                left_feat[..., : embed_dim // 2],  # 前x维
-                left_feat[..., embed_dim // 2:]
-                * left_values.unsqueeze(-1),  # 后y维乘数量
-            ],
-            dim=-1,
-        )
-        right_feat = torch.cat(
-            [
-                right_feat[..., : embed_dim // 2],
-                right_feat[..., embed_dim // 2:] * right_values.unsqueeze(-1),
-            ],
-            dim=-1,
-        )
+        # 直接用模长表示战斗力
+        left_feat = left_feat * left_values.unsqueeze(-1)
+        right_feat = right_feat * right_values.unsqueeze(-1)
 
         # FFN
         left_feat = left_feat + self.value_ffn(left_feat)
@@ -163,14 +141,23 @@ class UnitAwareTransformer(nn.Module):
             # FFN
             left_feat = left_feat + self.friend_ffn[i](left_feat)
             right_feat = right_feat + self.friend_ffn[i](right_feat)
-            left_feat = self.norm[i](left_feat)
-            right_feat = self.norm[i](right_feat)
+            # 不要归一化，数值嵌入用模长表示战斗力
+            # left_feat = self.norm[i](left_feat)
+            # right_feat = self.norm[i](right_feat)
 
-        # 输出战斗力
-        L = self.fc(left_feat).squeeze(-1) * left_mask
-        R = self.fc(right_feat).squeeze(-1) * right_mask
+        # 计算 L2 模长作为最终战斗力指标
+        # 这里不进行全连接，直接取几何距离
+        # 由于战斗力组合往往是非线性的，非线性由注意力模块处理
+        # 因此这里不要对向量进行求和再取模长，而是先取模长再求和
+        L_norms = torch.norm(left_feat, p=2, dim=-1)
+        R_norms = torch.norm(right_feat, p=2, dim=-1)
+
+        # 乘上 mask 排除无效单位，并在 k 维度求和 (B,)
+        # 在 dim=1 求和，保留 Batch 维度
+        L = (L_norms * left_mask).sum(dim=1)
+        R = (R_norms * right_mask).sum(dim=1)
 
         # 计算战斗力差输出概率，'L': 0, 'R': 1，R大于L时输出大于0.5
-        output = torch.sigmoid(R.sum(1) - L.sum(1))
+        output = torch.sigmoid(R - L)
 
         return output
